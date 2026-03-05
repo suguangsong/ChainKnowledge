@@ -1,0 +1,26 @@
+﻿services:
+  chainknowledge-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - chroma_data:/app/storage/chroma
+      - upload_data:/app/storage/uploads
+    expose:
+      - "8000"
+
+  chainknowledge-nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - chainknowledge-api
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  chroma_data:
+  upload_data:

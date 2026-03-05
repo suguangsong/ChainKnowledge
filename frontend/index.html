@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChainKnowledge</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --line: #d7deea;
+        --panel: #ffffff;
+        --text: #17213d;
+        --muted: #657188;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .app {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+      }
+
+      .status {
+        color: var(--muted);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .row > div {
+        flex: 1 1 220px;
+      }
+
+      input,
+      button,
+      select,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        margin-top: 6px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+      }
+
+      button {
+        background: #2e5dff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #1f4bdf;
+      }
+
+      .chat-box {
+        min-height: 260px;
+        max-height: 360px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        background: #fcfdff;
+      }
+
+      .msg {
+        margin: 8px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        line-height: 1.4;
+      }
+
+      .msg.user {
+        background: #eef3ff;
+      }
+
+      .msg.assistant {
+        background: #f5f7ff;
+        border: 1px solid #d5deff;
+      }
+
+      .source {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      .source-item {
+        margin: 8px 0;
+        padding: 8px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .small {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: 1fr 140px;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <h1>ChainKnowledge</h1>
+      <div class="small">企业知识库问答 API 前端演示（前后端分离）</div>
+      <div id="status" class="status">状态检测中...</div>
+
+      <div class="panel">
+        <div class="row">
+          <div>
+            <label>会话 ID</label>
+            <input id="sessionId" readonly />
+          </div>
+          <div>
+            <label>模型提供商</label>
+            <select id="provider">
+              <option value="openai">OpenAI</option>
+              <option value="chatglm">ChatGLM</option>
+            </select>
+          </div>
+          <div>
+            <label>模型</label>
+            <input id="model" placeholder="例如 gpt-4o-mini 或 glm-4" />
+          </div>
+          <div>
+            <label>API Base（可选）</label>
+            <input id="apiBase" placeholder="https://api.openai.com/v1" />
+          </div>
+          <div>
+            <label>API Key（会话临时）</label>
+            <input id="apiKey" type="password" placeholder="仅本次会话使用" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <label>TopK</label>
+            <input id="topK" type="number" min="1" max="20" value="4" />
+          </div>
+          <div>
+            <label>重排候选倍数</label>
+            <input id="candidateMultiplier" type="number" min="1" max="10" value="3" />
+          </div>
+          <div>
+            <label>重排TopK</label>
+            <input id="rerankTopK" type="number" min="1" max="10" value="4" />
+          </div>
+          <div>
+            <label>重排权重（0-1）</label>
+            <input id="rerankAlpha" type="number" min="0" max="1" step="0.05" value="0.7" />
+          </div>
+          <div>
+            <label>启用重排</label>
+            <label style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <input id="rerankEnabled" type="checkbox" checked />
+              <span>开启</span>
+            </label>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button id="refreshBtn">刷新状态</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>文档导入</h3>
+        <input id="files" type="file" multiple accept=".pdf,.txt,.md,.docx,.doc,.docm,.html,.htm,.csv" />
+        <div style="margin-top:8px;" class="toolbar">
+          <button id="uploadBtn">导入到知识库</button>
+          <button id="clearKnowledgeBtn">清空知识库</button>
+        </div>
+        <div id="uploadHint" class="small"></div>
+      </div>
+
+      <div class="panel">
+        <h3>对话</h3>
+        <div id="chat" class="chat-box"></div>
+        <textarea id="question" rows="3" placeholder="输入你的问题"></textarea>
+        <div class="toolbar" style="margin-top:8px;">
+          <button id="askBtn">发送</button>
+          <button id="clearSessionBtn">清空会话</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        provider: "openai",
+        model: "",
+        apiBase: "",
+        apiKey: "",
+        topK: 4,
+        candidateMultiplier: 3,
+        rerankTopK: 4,
+        rerankAlpha: 0.7,
+        rerankEnabled: true,
+      };
+
+      const sessionId = `session-${Date.now()}`;
+      document.getElementById("sessionId").value = sessionId;
+
+      const els = {
+        status: document.getElementById("status"),
+        provider: document.getElementById("provider"),
+        model: document.getElementById("model"),
+        apiBase: document.getElementById("apiBase"),
+        apiKey: document.getElementById("apiKey"),
+        topK: document.getElementById("topK"),
+        candidateMultiplier: document.getElementById("candidateMultiplier"),
+        rerankTopK: document.getElementById("rerankTopK"),
+        rerankAlpha: document.getElementById("rerankAlpha"),
+        rerankEnabled: document.getElementById("rerankEnabled"),
+        chat: document.getElementById("chat"),
+        question: document.getElementById("question"),
+        files: document.getElementById("files"),
+        uploadHint: document.getElementById("uploadHint"),
+        uploadBtn: document.getElementById("uploadBtn"),
+        clearKnowledgeBtn: document.getElementById("clearKnowledgeBtn"),
+        askBtn: document.getElementById("askBtn"),
+        refreshBtn: document.getElementById("refreshBtn"),
+        clearSessionBtn: document.getElementById("clearSessionBtn"),
+      };
+
+      function buildBody() {
+        state.provider = els.provider.value;
+        state.model = els.model.value.trim();
+        state.apiBase = els.apiBase.value.trim();
+        state.apiKey = els.apiKey.value.trim();
+        state.topK = Number(els.topK.value) || 4;
+        state.candidateMultiplier = Number(els.candidateMultiplier.value) || 3;
+        state.rerankTopK = Number(els.rerankTopK.value) || 4;
+        state.rerankerAlpha = Number(els.rerankAlpha.value);
+        state.rerankEnabled = els.rerankEnabled.checked;
+
+        return {
+          session_id: sessionId,
+          provider: state.provider,
+          model: state.model || undefined,
+          api_base: state.apiBase || undefined,
+          api_key: state.apiKey || undefined,
+          top_k: state.topK,
+          reranker_candidate_multiplier: state.candidateMultiplier,
+          reranker_top_k: state.rerankTopK,
+          reranker_alpha: state.rerankerAlpha,
+          reranker_enabled: state.rerankEnabled,
+          memory_window: 6,
+        };
+      }
+
+      function appendMsg(role, text, sources, meta) {
+        const wrapper = document.createElement("div");
+        wrapper.className = `msg ${role}`;
+        const content = document.createElement("div");
+        content.textContent = text;
+        wrapper.appendChild(content);
+
+        if (sources && sources.length) {
+          const sourceTitle = document.createElement("div");
+          sourceTitle.className = "source";
+          sourceTitle.textContent = "来源：";
+          wrapper.appendChild(sourceTitle);
+          sources.forEach((item) => {
+            const itemNode = document.createElement("div");
+            itemNode.className = "source-item";
+            itemNode.textContent = `${item.idx}. ${item.file}`;
+            if (item.page) {
+              itemNode.textContent += `（${item.page}）`;
+            }
+            itemNode.textContent += `：${item.snippet}`;
+            wrapper.appendChild(itemNode);
+          });
+        }
+
+        if (meta && typeof meta === 'object') {
+          const metaNode = document.createElement("div");
+          metaNode.className = "small";
+          const candidate = Number(meta.candidate_k || 0);
+          const retrieved = Number(meta.retrieved_count || 0);
+          const returned = Number(meta.returned_count || 0);
+          metaNode.textContent = `检索可视化：候选上限 ${candidate}，实际召回 ${retrieved}，进入上下文 ${returned}`;
+          wrapper.appendChild(metaNode);
+        }
+
+        els.chat.appendChild(wrapper);
+        els.chat.scrollTop = els.chat.scrollHeight;
+      }
+
+      function clearChat() {
+        els.chat.innerHTML = "";
+      }
+
+      async function refreshStatus() {
+        try {
+          const res = await fetch('/api/status');
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          els.status.textContent = `知识片段：${data.vector_count}，Collection：${data.collection_name}，已就绪`;
+        } catch (err) {
+          els.status.textContent = `服务状态异常：${err.message}`;
+        }
+      }
+
+      async function upload() {
+        const files = els.files.files;
+        if (!files.length) {
+          alert('请选择要上传的文件');
+          return;
+        }
+
+        const formData = new FormData();
+        Array.from(files).forEach((f) => formData.append('files', f));
+
+        els.uploadHint.textContent = '上传中...';
+        const res = await fetch('/api/documents', {
+          method: 'POST',
+          body: formData,
+        });
+        const payload = await res.json();
+        if (!res.ok) {
+          els.uploadHint.textContent = payload.detail || '上传失败';
+          return;
+        }
+        els.uploadHint.textContent = `导入完成：${payload.file_count} 个文档，${payload.chunk_count} 个分片`;
+        if (payload.failed && payload.failed.length) {
+          els.uploadHint.textContent += `，失败 ${payload.failed.length} 个`;
+        }
+        await refreshStatus();
+      }
+
+      async function ask() {
+        const question = els.question.value.trim();
+        if (!question) return;
+
+        appendMsg('user', question);
+        els.question.value = '';
+        const body = buildBody();
+        body.question = question;
+
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          appendMsg('assistant', `请求失败：${data.detail || '未知错误'}`);
+          return;
+        }
+        appendMsg('assistant', data.answer, data.sources || [], {
+          candidate_k: data.candidate_k,
+          retrieved_count: data.retrieved_count,
+          returned_count: data.returned_count,
+        });
+      }
+
+      async function clearSession() {
+        await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+        clearChat();
+      }
+
+      async function clearKnowledge() {
+        await fetch('/api/knowledge/clear', { method: 'POST' });
+        await refreshStatus();
+      }
+
+      els.refreshBtn.addEventListener('click', refreshStatus);
+      els.uploadBtn.addEventListener('click', upload);
+      els.askBtn.addEventListener('click', ask);
+      els.clearSessionBtn.addEventListener('click', clearSession);
+      els.clearKnowledgeBtn.addEventListener('click', clearKnowledge);
+
+      refreshStatus();
+    </script>
+  </body>
+</html>
